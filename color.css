@@ -1,0 +1,236 @@
+
+:root {
+    --primary-color: #00f2ff;
+    --secondary-color: #bd00ff;
+    --bg-dark: #0f172a;
+    --glass-bg: rgba(20, 20, 30, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --accent-glow: #ff0055;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: #e2e8f0;
+    font-family: 'Noto Sans TC', sans-serif;
+    overflow-x: hidden;
+    background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #0f172a);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    min-height: 100vh;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 自定義捲軸 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--secondary-color);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* 玻璃擬態卡片 */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* 導覽列優化 */
+.navbar-custom {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
+}
+
+.navbar-brand {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, #fff, var(--primary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+}
+
+/* 按鈕列表特效 */
+.neon-list-btn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--glass-border);
+    border-left: 4px solid transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 8px;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.neon-list-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: 0.5s;
+}
+
+.neon-list-btn:hover {
+    background: rgba(0, 242, 255, 0.05);
+    color: #fff;
+    border-color: var(--primary-color);
+    border-left: 4px solid var(--primary-color);
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.3);
+    padding-left: 20px;
+}
+
+.neon-list-btn:hover::before {
+    left: 100%;
+}
+
+/* 文章內容區塊 */
+.content-area {
+    line-height: 1.8;
+    font-size: 1.1rem;
+}
+
+.content-area h1 {
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+}
+
+.content-area h5 {
+    font-weight: 300;
+    margin-bottom: 1.2rem;
+    opacity: 0.9;
+}
+
+/* 頭像旋轉 */
+.avatar-img {
+    transition: transform 0.5s;
+    border: 2px solid var(--secondary-color);
+    box-shadow: 0 0 10px var(--secondary-color);
+    object-fit: cover;
+}
+.avatar-img:hover {
+    transform: rotate(360deg) scale(1.1);
+    box-shadow: 0 0 20px var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* 超顯眼個人資訊卡 Cyberpunk ID Card */
+.cyber-id-card {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid var(--primary-color);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.2), inset 0 0 20px rgba(0, 242, 255, 0.1);
+    margin-bottom: 30px;
+}
+
+.cyber-id-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+    animation: scanline 3s linear infinite;
+}
+
+@keyframes scanline {
+    0% { top: 0%; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+}
+
+.cyber-name {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 2px 2px 0px var(--secondary-color), -1px -1px 10px var(--primary-color);
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+
+.cyber-class {
+    font-family: 'Orbitron', sans-serif;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.cyber-badge {
+    background: linear-gradient(90deg, var(--secondary-color), #8a2be2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 0 15px rgba(189, 0, 255, 0.5);
+    animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+    0% { box-shadow: 0 0 10px rgba(189, 0, 255, 0.4); }
+    50% { box-shadow: 0 0 25px rgba(189, 0, 255, 0.8); }
+    100% { box-shadow: 0 0 10px rgba(189, 0, 255, 0.4); }
+}
+
+/* 打字機特效 */
+.typing-effect {
+    border-right: 3px solid var(--primary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    animation: blink 0.75s step-end infinite;
+    display: inline-block;
+    max-width: 100%;
+}
+
+@keyframes blink {
+    50% { border-color: transparent; }
+}
+
+/* 響應式調整 */
+@media (max-width: 992px) {
+    .sidebar-sticky {
+        position: static;
+        height: auto !important;
+        margin-bottom: 20px;
+    }
+    .main-row {
+        flex-direction: column-reverse;
+    }
+    .cyber-name {
+        font-size: 2rem;
+    }
+}
