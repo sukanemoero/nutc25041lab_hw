@@ -1,52 +1,56 @@
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent 
-from langchain_core.prompts import PromptTemplate, load_prompt
-from pathlib import Path
-from typing import Optional, List
-from langchain_tavily import TavilySearch
+from langchain.agents import create_agent
+from langchain_core.prompts import PromptTemplate
+from pathlib import Path, PosixPath
+from typing import Optional, List, Union
 from dotenv import load_dotenv
 from os import getenv
 from pydantic import BaseModel, Field
 from datetime import datetime
-from langchain_core.messages import HumanMessage
-from uuid import uuid4
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessageChunk
 from openai import InternalServerError
 from langchain.tools import tool
+from utils.maybe_this_this_speech_to_text import get_srt
+import base64
 import asyncio
-load_dotenv()
-PLATFORM=["Facebook", "Instagram", "Linkin"]
 
-model=ChatOpenAI(
+load_dotenv()
+
+
+model = ChatOpenAI(
     model_name="google/gemma-3-27b-it",
     base_url="https://ws-02.wade0426.me/v1",
     api_key="</NULL>",
     max_completion_tokens=100,
-    temperature=0
+    temperature=0,
 )
 
 
 async def timing_shower(stop_event):
     start_time = asyncio.get_event_loop().time()
-    
+
     while not stop_event.is_set():
         current_now = asyncio.get_event_loop().time()
         elapsed = current_now - start_time
-        
+
         print(f"\rRunning for: {elapsed:.2f}s", end="", flush=True)
-        
+
         await asyncio.sleep(0.05)
+
 
 async def with_timer(event, **kwargs):
     stop_event = asyncio.Event()
 
     timer_task = asyncio.create_task(timing_shower(stop_event))
 
-    result = await event(**kwargs)
+    async for chunk in event(**kwargs):
+        yield chunk
 
     stop_event.set()
-    
+
     await timer_task
-    return result 
+    # return result
+
 
 class SourceSummerizing(BaseModel):
     source: str = Field(..., description="The url of source.")
@@ -57,14 +61,17 @@ class SourceSummerizing(BaseModel):
         None, description="Original content of this source."
     )
 
+
 class WebSource(BaseModel):
     source: str = Field(..., description="The url of source.")
     title: Optional[str] = Field("", description="The title of source.")
     content: Optional[str] = Field("", description="The content of source.")
     favicon: Optional[str] = Field("", description="The url of favicon in source.")
 
+
 class RawSource(WebSource):
     raw: str = Field(..., description="The raw of source.")
+
 
 class FoundWebSource(WebSource):
     score: float = Field(..., description="The score of this search.")
@@ -73,138 +80,105 @@ class FoundWebSource(WebSource):
 class ImageResult(BaseModel):
     result: List[SourceSummerizing] = Field(..., description="The image result.")
 
+
 def load_prompt(name: str, **kwargs):
     template = ""
-    with open(Path(__file__).resolve().parent/'prompt'/f'{name.upper()}.md', mode='r', encoding="utf-8") as f:
+    with open(
+        Path(__file__).resolve().parent / "prompt" / f"{name.upper()}.md",
+        mode="r",
+        encoding="utf-8",
+    ) as f:
         template = f.read()
     prompt = PromptTemplate.from_template(template)
     return prompt.format(**kwargs)
 
 
 @tool
-async def fake_tool() -> str:
+async def load_audio(path: Union[str, PosixPath] = "") -> str:
     """
-    if you want to do anything, just call it
+    Transcribes an audio file into text using a multimodal AI model.
+
+    This function reads a WAV file from the local path, encodes it into base64,
+    and streams it to the model for transcription. If the primary model
+    service encounters an InternalServerError, it automatically falls back
+    to an alternative SRT generation method.
+
+    Args:
+        path (Union[str, PosixPath]): The file system path to the .wav audio file.
+
+    Returns:
+        str: The transcribed text content of the audio.
     """
-    return f"[!IMPOSSIBLE] Please reply directly."
-    
-class TavilySearchFormatted(TavilySearch):
-    def _run(self, *args, **kwargs):
-        return asyncio.create_task(self._arun(*args, **kwargs))
 
-    async def _arun(self, *args, **kwargs):
-        _call_id = str(uuid4())
-        query = kwargs.get("query", "")
-        tool_type = "search"
-
-        try:
-            result = await super()._arun(*args, **kwargs)
-            # tidied = await self._result_tidy(result)
-            # for k, ws in tidied.items():
-            #     for w in ws:
-            #         wc = w.copy()
-            #         wc.pop("score", None)
-        except Exception as e:
-            raise e
-        # print(tidied)
-        # return tidied 
-        print()
-        print(result.get('answer'))
-        return result.get('answer')
-
-    async def _result_tidy(self, result):
-        images = []
-
-        for image in result.pop("images", []):
-            url, description = self._content_filter(image)
-            images += [{"url": url, "description": description}]
-
-        image_response = []
-        for image in images:
-            url = image.get("url", "")
-            description = image.get("description", "")
-            image_response += [
-                SourceSummerizing(
-                    source=url if url else "",
-                    description=description if description else "",
-                ).model_dump()
+    audio_b64 = None
+    try:
+        with open(path, "rb") as f:
+            audio_b64 = base64.b64encode(f.read()).decode("utf-8")
+        message = HumanMessage(
+            content=[
+                {
+                    "type": "input_audio",
+                    "input_audio": {"data": audio_b64, "format": "wav"},
+                }
             ]
+        )
+        sysprompt = SystemMessage(load_prompt("AUDIO"))
+        result = AIMessageChunk("")
+        async for chunk in model.astream([sysprompt, message]):
+            result += chunk
+        return result.content
+    except InternalServerError:
+        result = await get_srt(path)
+        return result
 
-        founds = result.get("results", [])
-        founds.sort(key=lambda x: x.get("score", 1) * -1)
-        found_response = []
-        raw_response = []
-        for found in founds:
-            source = found.get("url", "")
-            title = found.get("title", "")
-            content = found.get("content", "")
-            favicon = found.get("favicon", "")
 
-            source = WebSource(
-                source=source, title=title, content=content, favicon=favicon
-            ).model_dump()
-            score = found.get("score", -1)
-
-            found_response += [FoundWebSource(**source, score=score).model_dump()]
-
-            if raw := found.get("raw_content", ""):
-                raw_response += [RawSource(**source, raw=raw).model_dump()]
-
-        return {
-            "images": image_response,
-            "founds": found_response,
-            "raws": raw_response,
-        }
-    def _content_filter(self, source):
-        url = None
-        description = None
-        print(source)
-        if isinstance(source, str):
-            if source.startswith("http"):
-                url = source
-            else:
-                description = source
-        elif isinstance(source, dict):
-            url = source.get("url", None)
-            description = source.get("description", None)
-        return url, description
-tools = []
-if (k:= getenv('TAVILY_API_KEY', None)):
-    tavily = TavilySearchFormatted(
-        tavily_api_key=k,
-        extract_depth="advanced",
-        include_favicon=True,
-        max_results=3,
-        include_answer=True,
-    )
-    tools += [tavily]
-else:
-    tools += [fake_tool]
-    print('Run without tavily.')
+tools = [load_audio]
 agent = create_agent(
     model=model,
     tools=tools,
-    system_prompt=load_prompt('AGENT', current_time=datetime.now().isoformat(), locale=getenv("LOCALE",'zh-tw')),
+    system_prompt=load_prompt(
+        "AGENT_AUDIO",
+        current_time=datetime.now().isoformat(),
+        locale=getenv("LOCALE", "zh-tw"),
+    ),
 )
 
 
 def main():
-    t = input('Now your topic: ')
-    inp = [{"messages":[HumanMessage(load_prompt('INPUT', platform=p, topic=t))]} for p in PLATFORM]
+    inp = {"messages": [HumanMessage(input())]}
     result = None
+
+    async def _main():
+        async for c in with_timer(agent.astream, input=inp):
+            if (
+                (model := c.get("model", None))
+                and (messages := model.get("messages", []))
+                and (message := messages[-1])
+            ):
+                if message.tool_calls:
+                    print("\nTool calling...")
+                else:
+                    print("\n" + message.content)
+            elif (
+                (tools := c.get("tools", None))
+                and (messages := tools.get("messages", []))
+                and (message := messages[-1])
+            ):
+                print("\n" + message.content)
+
     try:
-        result = asyncio.run(with_timer(agent.abatch, inputs=inp))
+        result = asyncio.run(_main())
     except InternalServerError as e:
-        print(f'\nModel Server Error: HTTP/{e.status_code}')
+        print(f"\nModel Server Error: HTTP/{e.status_code}")
     if result:
         for i, r in enumerate(result):
-            gr = r.get('messages',[None])[-1]
-            print(f'{PLATFORM[i]}: ')
+            gr = r.get("messages", [None])[-1]
             if gr:
                 print(gr.content)
             else:
-                print('NULL')
+                print("NULL")
 
 
 if __name__ == "__main__":
+    # print(asyncio.run(load_audio(Path(__file__).resolve().parent/'wav'/'Podcast_EP14.wav')))
     main()
