@@ -1,18 +1,20 @@
+from uuid import uuid4
+from utils.logger import logger
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent
-from langchain_core.prompts import PromptTemplate
-from pathlib import Path, PosixPath
-from typing import Optional, List, Union
+from typing import AnyStr, Dict, Literal, Optional, List, Union
 from dotenv import load_dotenv
-from os import getenv
-from pydantic import BaseModel, Field
+from os import environ
+from langgraph.types import Command
 from datetime import datetime
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessageChunk
+from langchain_core.messages import HumanMessage
 from openai import InternalServerError
-from langchain.tools import tool
-from utils.maybe_this_this_speech_to_text import get_srt
-import base64
+from graph.builder import graph_build
+from models.builder import PLATFORM
+from utils.configuration import Configurable, Metadata
+from langchain_core.runnables import RunnableConfig
 import asyncio
+
+from utils.state import State
 
 load_dotenv()
 
@@ -25,6 +27,7 @@ model = ChatOpenAI(
     temperature=0,
 )
 
+print_temp = ""
 
 async def timing_shower(stop_event):
     start_time = asyncio.get_event_loop().time()
@@ -33,10 +36,12 @@ async def timing_shower(stop_event):
         current_now = asyncio.get_event_loop().time()
         elapsed = current_now - start_time
 
-        print(f"\rRunning for: {elapsed:.2f}s", end="", flush=True)
+        print(f"\rRunning for: {elapsed:.2f}s | {print_temp+ ' --> '}", end="", flush=True)
 
         await asyncio.sleep(0.05)
-
+    
+    print(f"\rRunning for: {elapsed:.2f}s | {print_temp}", end="", flush=True)
+    print()
 
 async def with_timer(event, **kwargs):
     stop_event = asyncio.Event()
@@ -52,131 +57,132 @@ async def with_timer(event, **kwargs):
     # return result
 
 
-class SourceSummerizing(BaseModel):
-    source: str = Field(..., description="The url of source.")
-    description: str = Field(
-        ..., description="The description description of the source."
-    )
-    original_content: Optional[str] = Field(
-        None, description="Original content of this source."
-    )
-
-
-class WebSource(BaseModel):
-    source: str = Field(..., description="The url of source.")
-    title: Optional[str] = Field("", description="The title of source.")
-    content: Optional[str] = Field("", description="The content of source.")
-    favicon: Optional[str] = Field("", description="The url of favicon in source.")
-
-
-class RawSource(WebSource):
-    raw: str = Field(..., description="The raw of source.")
-
-
-class FoundWebSource(WebSource):
-    score: float = Field(..., description="The score of this search.")
-
-
-class ImageResult(BaseModel):
-    result: List[SourceSummerizing] = Field(..., description="The image result.")
-
-
-def load_prompt(name: str, **kwargs):
-    template = ""
-    with open(
-        Path(__file__).resolve().parent / "prompt" / f"{name.upper()}.md",
-        mode="r",
-        encoding="utf-8",
-    ) as f:
-        template = f.read()
-    prompt = PromptTemplate.from_template(template)
-    return prompt.format(**kwargs)
-
-
-@tool
-async def load_audio(path: Union[str, PosixPath] = "") -> str:
-    """
-    Transcribes an audio file into text using a multimodal AI model.
-
-    This function reads a WAV file from the local path, encodes it into base64,
-    and streams it to the model for transcription. If the primary model
-    service encounters an InternalServerError, it automatically falls back
-    to an alternative SRT generation method.
-
-    Args:
-        path (Union[str, PosixPath]): The file system path to the .wav audio file.
-
-    Returns:
-        str: The transcribed text content of the audio.
-    """
-
-    audio_b64 = None
-    try:
-        with open(path, "rb") as f:
-            audio_b64 = base64.b64encode(f.read()).decode("utf-8")
-        message = HumanMessage(
-            content=[
-                {
-                    "type": "input_audio",
-                    "input_audio": {"data": audio_b64, "format": "wav"},
-                }
-            ]
+def build_async_workflow(
+    configurable: Optional[Union[Configurable, Dict]] = None,
+):
+    async def workflow(
+        input: Union[
+            List[Union[AnyStr, HumanMessage, Dict[Literal["content"], AnyStr]]],
+            AnyStr,
+            HumanMessage,
+            Dict[Literal["content"], AnyStr],
+        ],
+        metadata: Union[Metadata, Dict],
+        configurable: Optional[Union[Configurable, Dict]] = configurable,
+    ):
+        configurable = (
+            Configurable(**configurable)
+            if isinstance(configurable, Dict)
+            else configurable
         )
-        sysprompt = SystemMessage(load_prompt("AUDIO"))
-        result = AIMessageChunk("")
-        async for chunk in model.astream([sysprompt, message]):
-            result += chunk
-        return result.content
-    except InternalServerError:
-        result = await get_srt(path)
-        return result
+
+        thread_id = configurable.thread_id
+        metadata = Metadata(**metadata) if isinstance(metadata, Dict) else metadata
+
+        graph = graph_build()
+        config = RunnableConfig(
+            metadata=metadata.model_dump(),
+            configurable=configurable.model_dump() if configurable else {},
+        )
+
+        now = datetime.now().microsecond
+        formatted_queries = []
+        if not isinstance(input, list):
+            input = [input]
+        for q in input:
+            if isinstance(q, HumanMessage):
+                q.name = "user_query"
+                q.created = now
+                formatted_queries += [q]
+            elif isinstance(q, dict):
+                formatted_queries += [
+                    HumanMessage(
+                        content=q.get("content", "<NULL/>"),
+                        name="user_query",
+                        created=now,
+                    )
+                ]
+            else:
+                formatted_queries += [
+                    HumanMessage(content=q, name="user_query", created=now)
+                ]
+        state = {
+            "query": formatted_queries,
+        }
+
+        if graph.get_state(config).interrupts:
+            state_input = Command(resume=State(**state))
+        else:
+            state_input = Command(update=State(**state))
+
+        stream_input = {"input": state_input, "config": config}
+        async for s in graph.astream(**stream_input):
+            yield s
+        checkpointer = graph.checkpointer
+        checkpointer.delete_thread(thread_id)
+
+    return workflow
 
 
-tools = [load_audio]
-agent = create_agent(
-    model=model,
-    tools=tools,
-    system_prompt=load_prompt(
-        "AGENT_AUDIO",
-        current_time=datetime.now().isoformat(),
-        locale=getenv("LOCALE", "zh-tw"),
-    ),
-)
+def conf_from_env(
+    conf_prefix: str, subs: Optional[Union[tuple[str], list[str], set[str]]] = None
+):
+    def _get_env_conf(sub_name: Optional[str] = None) -> dict[str, any]:
+        prefix = (
+            f"{conf_prefix.upper()}_{sub_name.upper()}__"
+            if sub_name
+            else f"{conf_prefix.upper()}__"
+        )
+        conf = {}
+
+        def append_to_conf(term: str, key: str, value: any) -> None:
+            if key.startswith(term):
+                conf_key = key[len(term) :].lower()
+                conf[conf_key] = value
+
+        for key, value in environ.items():
+            append_to_conf(prefix, key, value)
+
+        return conf
+
+    conf: dict[str, dict[str, any]] = {}
+    if subs:
+        for t in subs:
+            conf[t] = _get_env_conf(t)
+    else:
+        conf = _get_env_conf()
+    return conf
 
 
 def main():
-    inp = {"messages": [HumanMessage(input())]}
-    result = None
-
-    async def _main():
-        async for c in with_timer(agent.astream, input=inp):
-            if (
-                (model := c.get("model", None))
-                and (messages := model.get("messages", []))
-                and (message := messages[-1])
-            ):
-                if message.tool_calls:
-                    print("\nTool calling...")
-                else:
-                    print("\n" + message.content)
-            elif (
-                (tools := c.get("tools", None))
-                and (messages := tools.get("messages", []))
-                and (message := messages[-1])
-            ):
-                print("\n" + message.content)
-
+    load_dotenv()
     try:
-        result = asyncio.run(_main())
-    except InternalServerError as e:
-        print(f"\nModel Server Error: HTTP/{e.status_code}")
-    if result:
-        for i, r in enumerate(result):
-            gr = r.get("messages", [None])[-1]
-            if gr:
-                print(gr.content)
-            else:
-                print("NULL")
+        workflow = build_async_workflow(Configurable())
+        conf = conf_from_env("MODEL",["BASIC", "EMBED"])
+        conf["EMBED"]["embed"] = True
+        async def _main():
+            result = ""
+            path = []
+            async for c in with_timer(
+                workflow,
+                input=input("input: "),
+                metadata=Metadata(llms_config=conf, searxng_config=conf_from_env("SEARXNG")),
+            ):
+                for k, v in c.items():
+                    path += [k]
+                    global print_temp
+                    print_temp = ' --> '.join(path) 
+                    if k=="chat":
+                        result = v.get("answer")
+            return result
+
+        try:
+            result = asyncio.run(_main())
+            print(result)
+        except InternalServerError as e:
+            print(f"\nModel Server Error: HTTP/{e.status_code}")
+    except Exception:
+        logger.exception("haha")
 
 
 if __name__ == "__main__":
