@@ -19,6 +19,7 @@ dependencies = [
     "langchain-tavily>=0.2.17",
     "langgraph>=1.0.7",
     "loguru>=0.7.3",
+    "pandas>=3.0.0",
     "pydantic>=2.12.5",
     "pydantic-core>=2.41.5",
     "qdrant-client>=1.16.2",
