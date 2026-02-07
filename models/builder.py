@@ -2,12 +2,14 @@ from typing import Literal
 from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 PLATFORM = Literal["NVIDIA", "OPENAI"]
 PLATFORM_EMBEDDINGS = {"NVIDIA": NVIDIAEmbeddings, "OPENAI": OpenAIEmbeddings}
 PLATFORM_CHATMODELS = {
     "NVIDIA": None,
     "OPENAI": ChatOpenAI,
+    "GEMINI": ChatGoogleGenerativeAI,
 }
 
 

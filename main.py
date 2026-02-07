@@ -1,4 +1,3 @@
-from uuid import uuid4
 from utils.logger import logger
 from langchain_openai import ChatOpenAI
 from typing import AnyStr, Dict, Literal, Optional, List, Union
@@ -9,7 +8,6 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage
 from openai import InternalServerError
 from graph.builder import graph_build
-from models.builder import PLATFORM
 from utils.configuration import Configurable, Metadata
 from langchain_core.runnables import RunnableConfig
 import asyncio
@@ -29,6 +27,7 @@ model = ChatOpenAI(
 
 print_temp = ""
 
+
 async def timing_shower(stop_event):
     start_time = asyncio.get_event_loop().time()
 
@@ -36,12 +35,17 @@ async def timing_shower(stop_event):
         current_now = asyncio.get_event_loop().time()
         elapsed = current_now - start_time
 
-        print(f"\rRunning for: {elapsed:.2f}s | {print_temp+ ' --> '}", end="", flush=True)
+        print(
+            f"\rRunning for: {elapsed:.2f}s | {print_temp + ' --> '}",
+            end="",
+            flush=True,
+        )
 
         await asyncio.sleep(0.05)
-    
+
     print(f"\rRunning for: {elapsed:.2f}s | {print_temp}", end="", flush=True)
     print()
+
 
 async def with_timer(event, **kwargs):
     stop_event = asyncio.Event()
@@ -158,21 +162,24 @@ def main():
     load_dotenv()
     try:
         workflow = build_async_workflow(Configurable())
-        conf = conf_from_env("MODEL",["BASIC", "EMBED"])
+        conf = conf_from_env("MODEL", ["BASIC", "EMBED"])
         conf["EMBED"]["embed"] = True
+
         async def _main():
             result = ""
             path = []
             async for c in with_timer(
                 workflow,
                 input=input("input: "),
-                metadata=Metadata(llms_config=conf, searxng_config=conf_from_env("SEARXNG")),
+                metadata=Metadata(
+                    llms_config=conf, searxng_config=conf_from_env("SEARXNG")
+                ),
             ):
                 for k, v in c.items():
                     path += [k]
                     global print_temp
-                    print_temp = ' --> '.join(path) 
-                    if k=="chat":
+                    print_temp = " --> ".join(path)
+                    if k == "chat":
                         result = v.get("answer")
             return result
 

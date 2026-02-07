@@ -19,7 +19,7 @@ def get_searxng_tool(
     @tool
     async def search_searxng(
         query: str, time_range: str = "all", locale: str = _locale
-    )-> str:
+    ) -> str:
         """
         Search the web using SearXNG to find real-time information and URLs.
 
