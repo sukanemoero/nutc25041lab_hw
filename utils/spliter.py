@@ -115,7 +115,7 @@ class Splitter:
 
     @classmethod
     def split_texts(
-        cls, texts: List[str], chunk_size: int = 150, chunk_overlap: int = 20
+        cls, texts: List[str], chunk_size: int = 300, chunk_overlap: int = 45
     ):
         if not texts:
             return []
@@ -131,7 +131,7 @@ class Splitter:
 
     @classmethod
     def split_semantic_texts(
-        cls, texts: List[str], chunk_size: int = 150, chunk_overlap: int = 20
+        cls, texts: List[str], chunk_size: int = 300, chunk_overlap: int = 45
     ):
         if not texts:
             return []
@@ -143,7 +143,7 @@ class Splitter:
         return temp
 
     @classmethod
-    def split_characters(cls, texts: List[str], chunk_size: int = 150):
+    def split_characters(cls, texts: List[str], chunk_size: int = 300):
         if not texts:
             return []
         splitter = cls._get_character_spliter(chunk_size)
