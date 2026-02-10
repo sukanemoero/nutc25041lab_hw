@@ -20,6 +20,8 @@ from utils.qdrant import LocalQdrant
 from utils.reranker import Reranker
 from utils.spliter import Splitter
 
+TOPC=5
+TOPQ=5
 ROOT = Path(__file__).resolve().parent
 HWPATH = ROOT / "day6" / "HW"
 
@@ -27,8 +29,9 @@ DATA = [HWPATH / "qa_data.docx"]
 
 CLIENT = AsyncClient(timeout=1000)
 HWAPI_URL = "https://hw-01.wade0426.me/submit_answer"
-REWRITE_QUESTIONS = HWPATH / "questions.csv.xlsx"
-REWRITE_ANSWER = HWPATH / "questions_answer.csv.xlsx"
+REWRITE_QUESTIONS = HWPATH / "day6_HW_questions.csv.xlsx"
+REWRITE_ANSWER = HWPATH / "questions.csv.xlsx"
+DEFAULT_ANSWER = HWPATH / "questions_answer.csv.xlsx"
 MODEL_PATH = ROOT / "llms"
 
 
@@ -106,7 +109,17 @@ async def amain():
         logger.error(f"Failed to load CSV: {e}")
         return
 
+    try:
+        da: DataFrame = await xlsx_reader(DEFAULT_ANSWER)
+        logger.info(f"Loaded {len(da)} rows from {DEFAULT_ANSWER}")
+    except Exception as e:
+        logger.error(f"Failed to load CSV: {e}")
+        return
     v = [tuple(temp.tolist()[:2]) for temp in r.values]
+    da = [tuple(temp.tolist()[:3]) for temp in da.values]
+    dda = {}
+    for qi, q, a in da:
+        dda[qi] = (q, a)
 
     conf = conf_from_env("MODEL", ["EMBED", "BASIC"])
     conf["EMBED"]["embed"] = True
@@ -192,8 +205,8 @@ async def amain():
         qe = []
         try:
             items = sorted(list(qiq.items()))
+            items = items[:min(len(items), TOPQ)]
             logger.info(f"Processing conversation {ci} with {len(items)} questions.")
-
             for qi, q in items:
                 logger.debug(f"Rewriting query {qi} for conversation {ci}")
                 qs = [
@@ -206,7 +219,7 @@ async def amain():
                 r = await query_rewrite(conf["BASIC"], qs)
 
                 sr = await lq.qdrant().asimilarity_search_with_relevance_scores(
-                    r.content, k=5
+                    '\n'.join(r.content) if isinstance(r.content, list) else r.content, k=5
                 )
                 logger.debug(f"Found {len(sr)} context chunks for query {qi}")
 
@@ -228,10 +241,10 @@ async def amain():
                 r = await llm.ainvoke([prompt] + qs)
                 qe += [
                     await eval_tool.get_test_case(
-                        q, r.content, [s.page_content for s in sr]
+                        dda[qi][0], '\n'.join(r.content) if isinstance(r.content, list) else r.content, [s.page_content for s in sr], dda[qi][1]
                     )
                 ]
-                re += [{"q_id": qi, "questions": q, "answer": r.content}]
+                re += [{"q_id": qi, "questions": dda[qi][0], "answer": r.content}]
             temp = eval_tool.evaluate_response(qe)
             for i in range(len(re)):
                 re[i] |= temp[i].model_dump()
@@ -243,7 +256,7 @@ async def amain():
             return []
 
     logger.info("Starting concurrent LLM invocation...")
-    for temp in await gather(*[_invoke(ci, qiq) for ci, qiq in querys.items()]):
+    for temp in await gather(*[_invoke(ci, qiq) for ci, qiq in list(querys.items())[:TOPC]]):
         csv_data += temp
 
     logger.info(f"All processing finished. Collected {len(csv_data)} result rows.")

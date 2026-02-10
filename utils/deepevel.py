@@ -32,7 +32,7 @@ class LangChainModel(DeepEvalBaseLLM):
 
     async def a_generate(self, prompt: str) -> str:
         res = await self.model.ainvoke(prompt)
-        return res.content
+        return '\n'.join(res.content) if isinstance(res.content, list) else res.content
 
     def get_model_name(self):
         return getattr(self.model, "model_name", "Custom LangChain Model")
@@ -73,7 +73,7 @@ class LocalDeepeval:
     def evaluate_response(
         self,
         test_cases,
-    ) -> RAGMetrics:
+    ) -> list[RAGMetrics]:
 
         eval_result = evaluate(
             test_cases=test_cases,
@@ -83,16 +83,19 @@ class LocalDeepeval:
         first_test_result = eval_result.test_results[0]
         metrics_data_list = first_test_result.metrics_data
 
-        scores = {}
+        scores = []
         if metrics_data_list:
             for m in metrics_data_list:
+                temp = {}
                 key = m.name.replace(" ", "_")
-                scores[key] = m.score
+                temp[key] = m.score
+                score =RAGMetrics(
+                    Faithfulness=temp.get("Faithfulness", -1),
+                    Answer_Relevancy=temp.get("Answer_Relevancy", -1),
+                    Contextual_Recall=temp.get("Contextual_Recall", -1),
+                    Contextual_Precision=temp.get("Contextual_Precision", -1),
+                    Contextual_Relevancy=temp.get("Contextual_Relevancy", -1),
+                )
+                scores += [score]
 
-        return RAGMetrics(
-            Faithfulness=scores.get("Faithfulness", 0.0),
-            Answer_Relevancy=scores.get("Answer_Relevancy", 0.0),
-            Contextual_Recall=scores.get("Contextual_Recall", 0.0),
-            Contextual_Precision=scores.get("Contextual_Precision", 0.0),
-            Contextual_Relevancy=scores.get("Contextual_Relevancy", 0.0),
-        )
+        return scores
