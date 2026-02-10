@@ -1,0 +1,32 @@
+[project]
+name = "day7"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.13.*"
+dependencies = [
+    "deepeval>=3.8.4",
+    "docling>=2.72.0",
+    "docling-parse>=4.7.3",
+    "fastembed-gpu>=0.7.4",
+    "langchain>=1.2.9",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.2.9",
+    "langchain-google-genai>=4.2.0",
+    "langchain-nvidia-ai-endpoints>=1.0.3",
+    "langchain-openai>=1.1.8",
+    "langchain-qdrant>=1.1.0",
+    "llm-guard>=0.3.15",
+    "loguru>=0.7.3",
+    "markitdown>=0.1.4",
+    "pathlib>=1.0.1",
+    "pdfplumber>=0.11.9",
+    "qdrant-client>=1.16.2",
+    "semantic-text-splitter>=0.29.0",
+    "tiktoken>=0.7.0",
+    "transformers>=4.57.6",
+]
+[tool.uv]
+extra-build-variables = { tiktoken = { PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1" } }
+# [tool.uv.workspace]
+# members = ["day7"]
