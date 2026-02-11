@@ -39,3 +39,7 @@ dependencies = [
 environments = [
     "sys_platform == 'linux'"
 ]
+
+[tool.uv.workspace]
+members = ["day7"]
+exclude = ["day7"]
