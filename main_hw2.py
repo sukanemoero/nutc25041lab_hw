@@ -219,7 +219,7 @@ async def amain():
                 r = await query_rewrite(conf["BASIC"], qs)
 
                 sr = await lq.qdrant().asimilarity_search_with_relevance_scores(
-                    '\n'.join(r.content) if isinstance(r.content, list) else r.content, k=5
+                    '\n'.join(r.content) if isinstance(r.content, list) else r.content, k=10
                 )
                 logger.debug(f"Found {len(sr)} context chunks for query {qi}")
 

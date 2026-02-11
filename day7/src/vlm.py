@@ -27,9 +27,10 @@ def olmocr2_vlm_options(
         ),
         headers=headers,
         prompt=prompt,
-        timeout=120,  # olmocr2 可能需要較長處理時間
-        scale=2.0,  # 圖片縮放比例
+        timeout=1000,  # olmocr2 可能需要較長處理時間
+        scale=.5,  # 圖片縮放比例
         temperature=temperature,
         response_format=ResponseFormat.MARKDOWN,
+        
     )
     return options
